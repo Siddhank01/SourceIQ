@@ -10,10 +10,9 @@ from typing import Any
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from langchain_core.documents import Document
-from langchain_core.prompts import ChatPromptTemplate
-from langchain_groq import ChatGroq
 
 from backend_db import delete_session_group, get_session, init_db, list_sessions, upsert_session
+from graph.workflow import SelfRAGWorkflow
 from rag.loaders import DocumentLoader
 from rag.vectorstore import VectorStoreManager
 from utils.config import get_settings
@@ -42,13 +41,6 @@ def validate_model(model: str | None) -> str:
     return selected
 
 
-def require_key() -> str:
-    key = get_settings().get("GROQ_API_KEY", "")
-    if not key:
-        error(503, "GROQ_API_KEY is missing. Add it to .env before asking a question.")
-    return key
-
-
 def load_documents(files: list[UploadFile], urls: list[str], workdir: Path) -> tuple[list[Document], list[dict[str, str]]]:
     loader = DocumentLoader()
     documents: list[Document] = []
@@ -75,39 +67,20 @@ def load_documents(files: list[UploadFile], urls: list[str], workdir: Path) -> t
     return documents, sources
 
 
-def answer_with_context(question: str, model: str, documents: list[Document], history: list[dict[str, Any]], session_id: str) -> tuple[str, list[str]]:
-    require_key()
-    try:
-        persist_directory = CHROMA_ROOT / session_id
-        persist_directory.parent.mkdir(parents=True, exist_ok=True)
-        vectorstore = VectorStoreManager(persist_directory=str(persist_directory))
-        if documents:
-            vectorstore.create_vectorstore(documents)
-        context_docs = vectorstore.similarity_search(question, k=4)
-        if not context_docs:
-            error(422, "No indexed source was found for this session. Upload a document or add a URL before asking a question.")
-        context = "\n\n".join(document.page_content for document in context_docs)
-        history_text = "\n".join(f"{item.get('role')}: {item.get('text')}" for item in history[-6:])
-        prompt = ChatPromptTemplate.from_messages([
-            ("system", "You are a grounded document research assistant. Answer only from the provided context. If context is insufficient, say so. Cite source names in square brackets when possible."),
-            ("user", "Conversation:\n{history}\n\nContext:\n{context}\n\nQuestion: {question}"),
-        ])
-        llm = ChatGroq(model=model, groq_api_key=require_key(), temperature=0)
-        response = (prompt | llm).invoke({"history": history_text, "context": context, "question": question})
-        answer = response.content if isinstance(response.content, str) else str(response.content)
-        citations = sorted({Path(str(document.metadata.get("source", "source"))).name for document in context_docs})
-        return answer, citations
-    except HTTPException:
-        raise
-    except Exception as exc:
-        message = str(exc).lower()
-        if "collection" in message or "does not exist" in message or "no such" in message:
-            error(422, "This session has no indexed source. Upload a document or add a URL before asking a question.")
-        if "401" in message or "api key" in message or "authentication" in message:
-            error(502, "Groq rejected the configured API key. Check GROQ_API_KEY in .env.")
-        if "timeout" in message:
-            error(504, "The Groq request timed out. Please retry.")
-        error(502, f"LLM generation failed: {exc}")
+def run_self_rag(question: str, model: str, documents: list[Document], history: list[dict[str, Any]], session_id: str) -> dict[str, Any]:
+    persist_directory = CHROMA_ROOT / session_id
+    persist_directory.parent.mkdir(parents=True, exist_ok=True)
+    if documents:
+        VectorStoreManager(persist_directory=str(persist_directory)).create_vectorstore(documents)
+    workflow = SelfRAGWorkflow(max_retries=int(get_settings().get("MAX_RETRIES", 3)))
+    return workflow.run(
+        question,
+        model_name=model,
+        persist_directory=str(persist_directory),
+        conversation=history,
+        max_retrieval_attempts=2,
+        max_generation_attempts=2,
+    )
 
 
 @app.get("/api/health")
@@ -165,10 +138,33 @@ def answer(question: str = Form(...), session_id: str | None = Form(None), owner
     request_session_id = session_id or str(uuid.uuid4())
     with tempfile.TemporaryDirectory(prefix="self-rag-upload-") as directory:
         documents, uploaded_sources = load_documents(files, [str(item) for item in url_list], Path(directory))
-        generated_answer, citations = answer_with_context(question, selected_model, documents, conversation, request_session_id)
+        result = run_self_rag(question, selected_model, documents, conversation, request_session_id)
+    generated_answer = result.get("final_answer", "I cannot provide a reliable answer from the available evidence.")
+    citations = [str(item.get("id")) for item in result.get("sources", []) if item.get("id")]
+    evidence = result.get("retrieved_documents", [])
     answer_message = {"role": "assistant", "text": generated_answer, "citations": citations, "time": "Now"}
     user_message = {"role": "user", "text": question, "time": "Now"}
     all_messages = conversation + [user_message, answer_message]
     all_sources = existing_sources + uploaded_sources
     upsert_session(request_session_id, owner_value(owner), question[:44], f"{sum(message.get('role') == 'user' for message in all_messages)} questions • {len(all_sources)} sources", False, all_messages, all_sources)
-    return {"answer": generated_answer, "citations": citations, "session_id": request_session_id, "model": selected_model, "sources": uploaded_sources}
+    return {
+        "answer": generated_answer,
+        "citations": citations,
+        "session_id": request_session_id,
+        "model": selected_model,
+        "sources": uploaded_sources,
+        "evidence": evidence,
+        "status": result.get("status"),
+        "verification_status": result.get("verification_status"),
+        "confidence": result.get("confidence"),
+        "abstain_reason": result.get("abstain_reason"),
+        "reflection_failure": result.get("reflection_failure"),
+        "reflection_trace": result.get("reflection_trace", []),
+        "retrieval_decision": result.get("retrieval_decision"),
+        "passage_relevance_results": result.get("passage_relevance_results", []),
+        "answer_support_verification": result.get("answer_support_verification", {}),
+        "unsupported_claims": result.get("unsupported_claims", []),
+        "retrieval_attempts": result.get("retrieval_attempts", 0),
+        "generation_attempts": result.get("generation_attempts", 0),
+        "prompt_injection_detected": result.get("prompt_injection_detected", False),
+    }

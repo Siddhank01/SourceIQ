@@ -1,11 +1,12 @@
 import re
-from typing import Any, List, Optional
+from typing import Any, List, Optional, Tuple
+
 from langchain_chroma import Chroma
 from langchain_core.documents import Document
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 
-from utils.config import get_settings
 from rag.embeddings import get_embeddings
+from utils.config import get_settings
 
 
 class VectorStoreManager:
@@ -19,6 +20,13 @@ class VectorStoreManager:
     def create_vectorstore(self, documents: List[Document]) -> Chroma:
         splitter = RecursiveCharacterTextSplitter(chunk_size=500, chunk_overlap=80)
         chunks = splitter.split_documents(documents)
+        for index, chunk in enumerate(chunks):
+            metadata = dict(chunk.metadata or {})
+            parent_id = metadata.get("source_id") or metadata.get("source") or "source"
+            metadata["parent_source_id"] = str(parent_id)
+            metadata["chunk_id"] = f"{parent_id}::chunk-{index}"
+            metadata["source_id"] = metadata["chunk_id"]
+            chunk.metadata = metadata
         vectorstore = Chroma.from_documents(
             documents=chunks,
             embedding=self.embeddings,
@@ -44,11 +52,30 @@ class VectorStoreManager:
             )
             for content, metadata in zip(result.get("documents", []), result.get("metadatas", [])):
                 if content not in seen:
-                    exact_matches.append(Document(page_content=content, metadata=metadata or {}))
+                    metadata = dict(metadata or {})
+                    exact_matches.append(Document(page_content=content, metadata=metadata))
                     seen.add(content)
-        semantic_matches = vectorstore.similarity_search(query, k=k)
-        for document in semantic_matches:
+        semantic_matches = vectorstore.similarity_search_with_relevance_scores(query, k=k)
+        for document, score in semantic_matches:
             if document.page_content not in seen:
-                exact_matches.append(document)
+                metadata = dict(document.metadata or {})
+                metadata["score"] = float(score)
+                metadata.setdefault("source_id", metadata.get("source_id") or metadata.get("source") or "source")
+                exact_matches.append(Document(page_content=document.page_content, metadata=metadata))
                 seen.add(document.page_content)
         return exact_matches[:k]
+
+    def similarity_search_with_scores(self, query: str, k: int = 4) -> List[Tuple[Document, float]]:
+        vectorstore = self.load_vectorstore()
+        matches = vectorstore.similarity_search_with_relevance_scores(query, k=k)
+        scored_docs: List[Tuple[Document, float]] = []
+        seen: set[str] = set()
+        for document, score in matches:
+            if document.page_content in seen:
+                continue
+            metadata = dict(document.metadata or {})
+            metadata["score"] = float(score)
+            metadata.setdefault("source_id", metadata.get("source_id") or metadata.get("source") or "source")
+            scored_docs.append((Document(page_content=document.page_content, metadata=metadata), float(score)))
+            seen.add(document.page_content)
+        return scored_docs

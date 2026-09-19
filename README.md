@@ -1,149 +1,118 @@
-# Adaptive Self-RAG: Intelligent Document Research Assistant
+# Self-RAG-Inspired Research Assistant
 
-(1)Problem Statement
+This repository implements a graph-backed, Self-RAG-inspired document research assistant. It uses explicit retrieval reflection, passage relevance grading, query rewriting, grounded generation, claim verification, bounded regeneration, and abstention.
 
-Traditional retrieval-augmented generation (RAG) systems often retrieve a document bundle and answer immediately, without evaluating relevance, checking grounding, or correcting poor retrieval. Adaptive Self-RAG upgrades that pattern into an agentic document research workflow with retrieval, grading, query rewriting, verification, and bounded self-correction.
+**Important:** this is not a real pretrained or fine-tuned Self-RAG model. It does not load a Self-RAG checkpoint or reproduce the original model's learned reflection tokens. The reflection protocol is implemented with structured Pydantic outputs around a Groq model. Calling this project a real end-to-end Self-RAG model would be inaccurate unless a pretrained or fine-tuned Self-RAG model is added.
 
-(2)Why Normal RAG Is Insufficient
+## Architecture
 
-A single-pass retrieval chain may answer with a plausible but unsupported statement, fail on follow-up questions, or miss context when the initial query is weak. Adaptive Self-RAG adds explicit retrieval decisions, relevance checks, iterative query rewriting, and hallucination mitigation before returning a grounded answer.
-
-(3)Architecture Diagram
-
+```mermaid
 flowchart TD
-    A[User Question] --> B[Understand Context]
-    B --> C[Agentic Decision]
-    C --> D[Retriever Tool]
-    D --> E[Document Relevance Grader]
-    E -->|Insufficient| F[Query Rewriter]
-    F --> D
-    E -->|Sufficient| G[Answer Generation]
-    G --> H[Grounding / Hallucination Grader]
-    H -->|Ungrounded| I[Regenerate]
+    A[Question] --> B[Retrieval reflection]
+    B -->|Retrieve| C[Chroma retrieval]
+    B -->|NoRetrieve| Z[Abstain or final response]
+    C --> D[Prompt-injection filter]
+    D --> E[Passage relevance reflection]
+    E -->|Insufficient or rewrite| F[Query rewrite]
+    F -->|Duplicate or limit reached| Z
+    F --> C
+    E -->|Sufficient| G[Grounded generation]
+    G --> H[Claim-to-chunk verification]
+    H -->|Unsupported or invalid citation| I[Regenerate]
+    I -->|Limit reached| Z
     I --> G
-    H -->|Grounded| J[Answer Relevance Grader]
+    H --> J[Answer relevance reflection]
     J -->|Poor| F
-    J -->|Good| K[Final Grounded Answer]
-    K --> L[Sources + Confidence + Verification]
+    J -->|Useful| K[Answer with trace and citations]
 ```
 
-(4)Complete Workflow
+## Safety and correctness behavior
 
-1. The user asks a question.
-2. The system incorporates conversation memory and query understanding.
-3. A LangGraph state graph decides whether to call the retriever or perform a rewrite.
-4. A LangChain Retriever Tool performs retrieval from Chroma using HuggingFace embeddings.
-5. A Pydantic document relevance grader scores the retrieved documents.
-6. If relevance is low, the query is rewritten and retrieval is repeated.
-7. A grounded answer is generated from the top supporting chunks.
-8. A grounding score and hallucination check decide whether regeneration is needed.
-9. An answer relevance grader checks usefulness and source alignment.
-10. If answer relevance is weak, the query is rewritten and retrieval is attempted again.
-11. The final answer is returned with sources, confidence, reliability, and workflow status.
+- Reflection cannot silently fall back to a fabricated score. Missing credentials, model errors, or invalid structured output become explicit workflow failures and abstentions.
+- Retrieved text is treated as untrusted data. Instruction-like passages are filtered and recorded in the reflection trace.
+- Each indexed chunk receives a stable `source_id`. Supported claims must cite retrieved chunk IDs; citations to unseen chunks invalidate the answer.
+- Unsupported claims trigger a bounded regeneration attempt. The workflow abstains when generation or retrieval limits are reached.
+- Query rewrites are tracked and duplicate queries terminate the loop.
+- Retrieval and generation have separate attempt budgets. The API currently uses two retrieval attempts and two generation attempts per question.
+- The API returns retrieval decisions, passage grades, claim verification, attempts, injection flags, abstention reasons, and the complete reflection trace.
+- An abstention is returned as a structured successful response with `status: "Abstain"`, `verification_status: "abstained"`, a user-safe answer, and `abstain_reason`; it is not represented as a fabricated answer or confidence score.
 
-(5)Agentic Behavior
+## API response
 
-The key idea is to treat retrieval as a tool action. Retrieval is represented by a LangChain Retriever Tool created through the retriever API in the codebase, then routed through LangGraph state transitions. Agentic behavior is expressed through stateful routing, bounded retry loops, and structured evaluation steps.
+`POST /api/answer` accepts multipart form data containing `question`, `model`, optional `session_id`, conversation `history`, source metadata, URLs, and uploaded files. Its response includes:
 
-(6)Self-Correction Mechanism:-
+- `answer`, `citations`, `sources`, and retrieved `evidence`;
+- `retrieval_decision` and `passage_relevance_results`;
+- `answer_support_verification`, `unsupported_claims`, and `verification_status`;
+- `reflection_trace`, `retrieval_attempts`, and `generation_attempts`;
+- `status`, `confidence`, `abstain_reason`, `reflection_failure`, and `prompt_injection_detected`.
 
-Self-correction is implemented through:
+The frontend renders the answer together with its citations, verification/abstention state, and expandable reflection trace.
 
-- rel relevance grading;
-- query rewriting when retrieval is insufficient;
-- grounding and hallucination grading;
-- answer relevance grading;
-- retry count tracking and bounded loops.
+## Run locally
 
-(7)Hallucination Mitigation
-
-The system tries to prevent unsupported answers by scoring each answer for groundedness against cited sources. If grounding is poor, the answer can be regenerated and re-grounded with retrieved context.
-
-(8)Evaluation Approach
-
-The repository includes an evaluation module that scores retrieval relevance, groundedness, answer relevance, correction success, successful query rewriting, and end-to-end answer quality using sample questions and expected source evidence.
-
-(9)Example Use Cases
-
-- company and internal policy research
-- technical documentation Q&A
-- research paper summarization
-- policy or legal comparative analysis
-- enterprise knowledge-base assistant
-
-(10)Technologies
-
-- Python
-- Streamlit
-- LangChain
-- LangGraph
-- LangChain Groq
-- ChromaDB
-- HuggingFace embeddings
-- Pydantic
-- Recursive text splitting
-- document loading via LangChain and loaders
-
-(11)Setup Instructions
-
-1. Create and activate a Python environment.
-2. Install dependencies:
+Create a virtual environment and install dependencies:
 
 ```bash
+python -m venv .venv
+.venv\\Scripts\\activate
 pip install -r requirements.txt
 ```
 
-3. Copy the example environment file and add your Groq key:
+Create `.env` with a Groq key and optional model settings:
 
-```bash
-copy .env.example .env
+```env
+GROQ_API_KEY=your_key_here
+GROQ_MODEL=openai/gpt-oss-20b
+MAX_RETRIES=3
 ```
 
-4. Run the app:
+Start the API:
 
 ```bash
-streamlit run app.py
+uvicorn api:app --reload
 ```
 
-## Project Structure
+Start the React frontend in another terminal:
+
+```bash
+cd frontend
+npm install
+npm run dev
+```
+
+The API is served on `http://127.0.0.1:8000` and the frontend on the Vite URL shown in the terminal.
+
+## Evaluation
+
+`evaluation/evaluate.py` evaluates labeled examples rather than returning fixed demonstration scores. Each example can provide expected source IDs, expected answer terms, expected rewrite behavior, expected abstention behavior, retrieved IDs, citations, and unsupported claims. Use `EvaluationMetrics.evaluate_dataset()` with a labeled dataset to obtain aggregate retrieval precision/recall, citation precision/recall, answer-term recall, correction success, abstention correctness, and end-to-end metrics.
+
+## Tests
+
+```bash
+python -m pytest -q
+```
+
+The test suite covers API validation and persistence, graph construction, structured reflection contracts, explicit reflection failure, passage/citation behavior, duplicate-query termination, bounded retries, and labeled evaluation helpers. Model-backed behavioral tests mock the workflow/reflection boundary so they remain deterministic and do not require a live Groq request.
+
+The current validation result is 14 backend tests passing. The React frontend also passes its production TypeScript/Vite build.
+
+## Repository layout
 
 ```text
-app.py
-graph/
-    state.py
-    workflow.py
-    nodes.py
-rag/
-    loaders.py
-    embeddings.py
-    vectorstore.py
-    retriever.py
-    tools.py
-models/
-    graders.py
-    schemas.py
-utils/
-    config.py
-    helpers.py
-evaluation/
-    evaluate.py
-tests/
-requirements.txt
-.env.example
-.gitignore
-README.md
+api.py                 FastAPI entry point and workflow response mapping
+app.py                 Streamlit entry point
+graph/                 LangGraph state, routing, and nodes
+models/                Structured reflection schemas and Groq runner
+rag/                   Loaders, chunk IDs, vector store, and retriever
+evaluation/            Label-driven evaluation
+tests/                 Regression and behavioral tests
+frontend/              React + TypeScript research UI
 ```
 
-## Limitations
+## Known limitations
 
-- This implementation is intentionally lightweight and interview-friendly.
-- Web URL retrieval is represented as an optional controlled retrieval pattern rather than a full web search engine.
-- Groq API availability and model compatible availability may vary by region.
-
-## Future Improvements
-
-- Ranking and reranker integration
-- Query planner and multi-hop reasoning
-- Parallel retrieval over uploaded files and URLs
-- Explanation layer for source traceability
-
+- Reflection and generation require a compatible Groq model and a valid API key.
+- This is a structured orchestration implementation, not a pretrained Self-RAG checkpoint.
+- Retrieval quality depends on the selected embedding model, chunking, and source quality.
+- Authentication is currently a lightweight local session identity, not production user authentication.

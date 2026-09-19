@@ -90,6 +90,14 @@ button:disabled { cursor: not-allowed; opacity: .45; }
 .message-content > p, .assistant-copy p { margin: 7px 0 0; color: #b8bec9; font-size: 13px; line-height: 1.72; }
 .user-message .message-content > p { color: #d8dee2; }
 .verified-label, .thinking-label { display: inline-flex; align-items: center; gap: 3px; padding: 3px 6px; border-radius: 4px; color: #7fd7c7; background: #1b332f; font: 9px 'DM Mono'; font-weight: 400; }
+.abstained-label { color: #e5ae93; background: #382924; }
+.abstain-reason { margin-top: 11px; padding: 9px 10px; border-left: 2px solid #b97867; color: #d8aa9a; background: #261d1d; font: 10px/1.5 'DM Mono'; }
+.reflection-details { margin-top: 14px; border-top: 1px solid #263238; color: #86959a; font: 9px 'DM Mono'; }
+.reflection-details summary { padding: 10px 0 7px; cursor: pointer; color: #8bbdb9; }
+.reflection-list { display: grid; gap: 5px; padding-bottom: 3px; }
+.reflection-event { display: flex; justify-content: space-between; gap: 12px; padding: 6px 8px; border: 1px solid #26343a; border-radius: 5px; background: #12191e; }
+.reflection-event b { color: #b5d0cb; font-weight: 500; text-transform: capitalize; }
+.reflection-event span { overflow: hidden; color: #718188; text-align: right; text-overflow: ellipsis; white-space: nowrap; }
 .assistant-copy { padding-top: 1px; }
 .assistant-copy h3 { margin: 19px 0 7px; color: #e8ebef; font: 600 12px 'Space Grotesk'; }
 .assistant-copy ul { padding-left: 19px; margin: 0; color: #acb4bf; font-size: 12px; line-height: 1.75; }
