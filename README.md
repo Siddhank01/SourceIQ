@@ -36,6 +36,7 @@ flowchart TD
 - Retrieval and generation have separate attempt budgets. The API currently uses two retrieval attempts and two generation attempts per question.
 - The API returns retrieval decisions, passage grades, claim verification, attempts, injection flags, abstention reasons, and the complete reflection trace.
 - An abstention is returned as a structured successful response with `status: "Abstain"`, `verification_status: "abstained"`, a user-safe answer, and `abstain_reason`; it is not represented as a fabricated answer or confidence score.
+- Only non-abstained answers are persisted in Recent sessions. Failed or evidence-free requests remain visible in the current response but do not create misleading session entries.
 
 ## API response
 

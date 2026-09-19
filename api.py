@@ -146,7 +146,8 @@ def answer(question: str = Form(...), session_id: str | None = Form(None), owner
     user_message = {"role": "user", "text": question, "time": "Now"}
     all_messages = conversation + [user_message, answer_message]
     all_sources = existing_sources + uploaded_sources
-    upsert_session(request_session_id, owner_value(owner), question[:44], f"{sum(message.get('role') == 'user' for message in all_messages)} questions • {len(all_sources)} sources", False, all_messages, all_sources)
+    if result.get("status") != "Abstain":
+        upsert_session(request_session_id, owner_value(owner), question[:44], f"{sum(message.get('role') == 'user' for message in all_messages)} questions • {len(all_sources)} sources", False, all_messages, all_sources)
     return {
         "answer": generated_answer,
         "citations": citations,
