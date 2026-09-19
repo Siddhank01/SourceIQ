@@ -1,0 +1,61 @@
+# Python environment and dependencies
+.venv/
+venv/
+env/
+ENV/
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.so
+.Python
+pip-wheel-metadata/
+
+# Package managers
+node_modules/
+frontend/node_modules/
+frontend/dist/
+frontend/.vite/
+
+# Build artifacts
+build/
+dist/
+*.egg-info/
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+.mypy_cache/
+.ruff_cache/
+
+# Local databases and runtime generated data
+*.db
+*.sqlite3
+*.sqlite
+self_rag.sqlite3
+chroma_sessions/
+chroma_db/
+data/
+logs/
+*.log
+
+# IDE/editor files
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Secrets and environment configs
+.env
+.env.*
+!.env.example
+
+# Generated frontend build metadata
+frontend/tsconfig.*.tsbuildinfo
+frontend/vite.config.js
+frontend/vite.config.d.ts
+
+# Local notebooks or scratch files
+.ipynb_checkpoints/
+*.tmp
+*.bak
