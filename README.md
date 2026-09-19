@@ -74,6 +74,12 @@ Start the API:
 uvicorn api:app --reload
 ```
 
+Deployment platforms that expect `app.py` can use the equivalent target:
+
+```bash
+uvicorn app:app --host 0.0.0.0 --port 8000
+```
+
 Start the React frontend in another terminal:
 
 ```bash
@@ -83,6 +89,7 @@ npm run dev
 ```
 
 The API is served on `http://127.0.0.1:8000` and the frontend on the Vite URL shown in the terminal.
+The legacy Streamlit interface remains available with `streamlit run app.py`.
 
 ## Evaluation
 
