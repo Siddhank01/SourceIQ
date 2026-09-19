@@ -147,10 +147,3 @@ README.md
 - Parallel retrieval over uploaded files and URLs
 - Explanation layer for source traceability
 
-## Interview Questions and Talking Points
-
-- How does the workflow use LangGraph state transitions for routing?
-- Where does the retriever tool live and how is retrieval explicit?
-- How do Pydantic structured outputs improve grader reliability?
-- Why is bounded retry important in an agentic RAG loop?
-- How is grounding checked before the final answer is shown?
