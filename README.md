@@ -9,7 +9,7 @@ This repository implements a graph-backed, Self-RAG-inspired document research a
 ```mermaid
 flowchart TD
     A[Question] --> B[Retrieval reflection]
-    B -->|Retrieve| C[Chroma retrieval]
+    B -->|Retrieve| C[Hosted chunk retrieval]
     B -->|NoRetrieve| Z[Abstain or final response]
     C --> D[Prompt-injection filter]
     D --> E[Passage relevance reflection]
@@ -60,11 +60,13 @@ python -m venv .venv
 pip install -r requirements.txt
 ```
 
-The default requirements are serverless-safe and use a lightweight SQLite lexical retriever when Chroma/HuggingFace dependencies are unavailable. For the full local Chroma and HuggingFace embedding stack, install the optional profile:
+The default requirements are serverless-safe. Retrieval and session persistence use Supabase tables through its REST API; no local SQLite database or Chroma directory is used by the production path.
 
 ```bash
 pip install -r requirements-full.txt
 ```
+
+The full profile is optional for local experimentation only. It is not required by the Vercel API deployment.
 
 Create `.env` with a Groq key and optional model settings:
 
@@ -72,7 +74,12 @@ Create `.env` with a Groq key and optional model settings:
 GROQ_API_KEY=your_key_here
 GROQ_MODEL=openai/gpt-oss-20b
 MAX_RETRIES=3
+SUPABASE_URL=https://your-project.supabase.co
+SUPABASE_SERVICE_ROLE_KEY=your_server_only_service_role_key
+CORS_ORIGINS=https://your-frontend.vercel.app
 ```
+
+Run [supabase/schema.sql](supabase/schema.sql) in the Supabase SQL editor before using document upload or session history. Keep `SUPABASE_SERVICE_ROLE_KEY` server-side; never expose it as a frontend variable.
 
 Start the API:
 
@@ -94,14 +101,14 @@ npm install
 npm run dev
 ```
 
-The API is served on `http://127.0.0.1:8000` and the frontend on the Vite URL shown in the terminal.
-The legacy Streamlit interface remains available with `streamlit run streamlit_app.py`.
+For local development, the API is served on `http://127.0.0.1:8000` and the frontend on the Vite URL shown in the terminal. Production frontend builds must set `VITE_API_URL`; they do not fall back to localhost.
+The legacy Streamlit interface is isolated in `streamlit_app.py` and is not part of the Vercel deployment.
 
 ## Serverless deployment
 
-The repository includes `.vercelignore` to keep local `.venv`, `node_modules`, Chroma indexes, SQLite files, caches, and Git metadata out of serverless function bundles. These local artifacts are not application dependencies and can make a deployment exceed provider size limits. The default `requirements.txt` also avoids Torch, Sentence Transformers, Chroma, ONNX Runtime, and Streamlit in the function bundle; those packages are available through `requirements-full.txt` for local use.
+The repository includes `.vercelignore` to keep local environments, caches, indexes, databases, and Git metadata out of serverless function bundles. The API uses only environment-based Supabase persistence and Groq credentials. There is no production dependency on local SQLite or Chroma storage.
 
-For a serverless deployment, configure the Python entry point as `app:app` and provide `GROQ_API_KEY` through the platform's environment settings. The SQLite retriever and session database are local runtime state; use a persistent database/object store or an external vector database when deploying beyond a single ephemeral instance.
+For a serverless deployment, configure the Python entry point as `app:app` and provide `GROQ_API_KEY`, `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, and `CORS_ORIGINS` through the platform's environment settings. Deploy the `frontend` directory separately as a Vercel static Vite project with `VITE_API_URL` pointing at the API deployment.
 
 ## Evaluation
 
@@ -123,6 +130,9 @@ The current validation result is 14 backend tests passing. The React frontend al
 api.py                 FastAPI implementation and workflow response mapping
 app.py                 FastAPI deployment entry point
 streamlit_app.py       Optional legacy Streamlit interface
+storage.py             Supabase REST session and document-chunk adapters
+supabase/schema.sql    Hosted persistence schema
+vercel.json            Python API deployment manifest
 graph/                 LangGraph state, routing, and nodes
 models/                Structured reflection schemas and Groq runner
 rag/                   Loaders, chunk IDs, vector store, and retriever
@@ -135,6 +145,6 @@ frontend/              React + TypeScript research UI
 
 - Reflection and generation require a compatible Groq model and a valid API key.
 - This is a structured orchestration implementation, not a pretrained Self-RAG checkpoint.
-- Retrieval uses Chroma/HuggingFace embeddings with `requirements-full.txt`, or a smaller SQLite lexical fallback with the default requirements.
-- Serverless local storage is ephemeral; production deployments need persistent storage for sessions and indexed documents.
+- Retrieval uses hosted Supabase document chunks with deterministic lexical ranking; a hosted vector database can replace this adapter without changing the Self-RAG workflow.
+- Supabase availability and network latency affect sessions and retrieval.
 - Authentication is currently a lightweight local session identity, not production user authentication.

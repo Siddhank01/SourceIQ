@@ -8,9 +8,11 @@ def get_settings():
     return {
         "GROQ_API_KEY": os.getenv("GROQ_API_KEY", ""),
         "GROQ_MODEL": os.getenv("GROQ_MODEL", "openai/gpt-oss-20b"),
+        "SUPABASE_URL": os.getenv("SUPABASE_URL", ""),
+        "SUPABASE_SERVICE_ROLE_KEY": os.getenv("SUPABASE_SERVICE_ROLE_KEY", ""),
+        "CORS_ORIGINS": os.getenv("CORS_ORIGINS", ""),
         "MAX_RETRIES": int(os.getenv("MAX_RETRIES", "3")),
         "EMBEDDINGS_MODEL": os.getenv("EMBEDDINGS_MODEL", "all-MiniLM-L6-v2"),
-        "CHROMA_PERSIST_DIR": os.getenv("CHROMA_PERSIST_DIR", "chroma_db"),
     }
 
 

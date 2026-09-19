@@ -64,12 +64,13 @@ class SelfRAGNodes:
         state["status"] = "Retrieving"
         if state["retrieval_attempts"] > int(state.get("max_retrieval_attempts", 2)):
             return SelfRAGNodes._abstain(state, "Maximum retrieval attempts reached without validated evidence.")
-        persist_directory = state.get("persist_directory") or get_settings().get("CHROMA_PERSIST_DIR", "chroma_db")
         try:
+            document_store = state.get("document_store")
+            if document_store is None:
+                raise RuntimeError("Hosted document storage is not configured.")
             from rag.retriever import Retriever
-            from rag.vectorstore import VectorStoreManager
 
-            retriever = Retriever(VectorStoreManager(persist_directory=str(persist_directory)).load_vectorstore())
+            retriever = Retriever(document_store)
             docs = retriever.retrieve(query, k=state.get("top_k", 4))
         except Exception as exc:
             state["reflection_failure"] = str(exc)

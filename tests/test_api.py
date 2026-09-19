@@ -57,7 +57,6 @@ def test_answer_exposes_workflow_trace(monkeypatch):
 
 
 def test_session_upsert_and_delete(tmp_path, monkeypatch):
-    monkeypatch.setattr(backend_db, 'DB_PATH', tmp_path / 'test.sqlite3')
     payload = {'id': 'session-1', 'owner': 'tester@example.com', 'title': 'Research', 'description': '1 question', 'saved': True, 'messages': [{'role': 'user', 'text': 'Question'}], 'sources': []}
     client = TestClient(app)
     first = client.post('/api/sessions', json=payload)

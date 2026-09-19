@@ -10,7 +10,7 @@ def create_retriever_tool_from_retriever(retriever: Retriever, name: str = "docu
     return create_retriever_tool(
         retriever,
         name=name,
-        description="Search the local Chroma knowledge base for relevant documents.",
+        description="Search the hosted document knowledge base for relevant evidence.",
     )
 
 

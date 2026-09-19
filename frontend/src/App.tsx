@@ -8,7 +8,7 @@ type TraceEvent = { event: string; status?: string; reason?: string; query?: str
 type Message = { role: 'user' | 'assistant'; text: string; citations?: string[]; time?: string; status?: string; verification_status?: string; confidence?: number; abstain_reason?: string | null; reflection_trace?: TraceEvent[]; passage_relevance_results?: Array<{ passage_id: string; relevant: boolean; score: number }> }
 type Session = { id: string; title: string; description: string; saved: boolean; messages: Message[]; sources: Source[]; time?: string }
 type User = { email: string; name: string }
-const API = import.meta.env.VITE_API_URL ?? 'http://127.0.0.1:8000'
+const API = import.meta.env.VITE_API_URL ?? (import.meta.env.DEV ? 'http://127.0.0.1:8000' : '')
 
 function App() {
   const [messages, setMessages] = useState<Message[]>([])

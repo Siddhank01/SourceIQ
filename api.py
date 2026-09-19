@@ -13,14 +13,15 @@ from langchain_core.documents import Document
 
 from backend_db import delete_session_group, get_session, init_db, list_sessions, upsert_session
 from graph.workflow import SelfRAGWorkflow
+from storage import HostedDocumentStore, StorageUnavailable
 from utils.config import get_settings
 
 app = FastAPI(title="Self-RAG API", version="1.0.0")
-app.add_middleware(CORSMiddleware, allow_origins=["http://127.0.0.1:5173", "http://localhost:5173", "http://127.0.0.1:5175"], allow_credentials=True, allow_methods=["*"], allow_headers=["*"])
+allowed_origins = [origin.strip() for origin in get_settings().get("CORS_ORIGINS", "").split(",") if origin.strip()]
+app.add_middleware(CORSMiddleware, allow_origins=allowed_origins, allow_credentials=True, allow_methods=["*"], allow_headers=["*"])
 init_db()
 
 SUPPORTED_MODELS = ("openai/gpt-oss-20b", "openai/gpt-oss-120b")
-CHROMA_ROOT = Path(__file__).resolve().parent / "chroma_sessions"
 
 
 def error(status: int, detail: str) -> None:
@@ -68,17 +69,19 @@ def load_documents(files: list[UploadFile], urls: list[str], workdir: Path) -> t
 
 
 def run_self_rag(question: str, model: str, documents: list[Document], history: list[dict[str, Any]], session_id: str) -> dict[str, Any]:
-    persist_directory = CHROMA_ROOT / session_id
-    persist_directory.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        document_store = HostedDocumentStore(session_id)
+    except StorageUnavailable as exc:
+        error(503, str(exc))
     if documents:
-        from rag.vectorstore import VectorStoreManager
+        from rag.vectorstore import _split_documents
 
-        VectorStoreManager(persist_directory=str(persist_directory)).create_vectorstore(documents)
+        document_store.replace(_split_documents(documents))
     workflow = SelfRAGWorkflow(max_retries=int(get_settings().get("MAX_RETRIES", 3)))
     return workflow.run(
         question,
         model_name=model,
-        persist_directory=str(persist_directory),
+        document_store=document_store,
         conversation=history,
         max_retrieval_attempts=2,
         max_generation_attempts=2,
