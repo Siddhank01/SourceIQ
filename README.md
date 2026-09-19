@@ -60,6 +60,12 @@ python -m venv .venv
 pip install -r requirements.txt
 ```
 
+The default requirements are serverless-safe and use a lightweight SQLite lexical retriever when Chroma/HuggingFace dependencies are unavailable. For the full local Chroma and HuggingFace embedding stack, install the optional profile:
+
+```bash
+pip install -r requirements-full.txt
+```
+
 Create `.env` with a Groq key and optional model settings:
 
 ```env
@@ -89,13 +95,13 @@ npm run dev
 ```
 
 The API is served on `http://127.0.0.1:8000` and the frontend on the Vite URL shown in the terminal.
-The legacy Streamlit interface remains available with `streamlit run app.py`.
+The legacy Streamlit interface remains available with `streamlit run streamlit_app.py`.
 
 ## Serverless deployment
 
-The repository includes `.vercelignore` to keep local `.venv`, `node_modules`, Chroma indexes, SQLite files, caches, and Git metadata out of serverless function bundles. These local artifacts are not application dependencies and can make a deployment exceed provider size limits.
+The repository includes `.vercelignore` to keep local `.venv`, `node_modules`, Chroma indexes, SQLite files, caches, and Git metadata out of serverless function bundles. These local artifacts are not application dependencies and can make a deployment exceed provider size limits. The default `requirements.txt` also avoids Torch, Sentence Transformers, Chroma, ONNX Runtime, and Streamlit in the function bundle; those packages are available through `requirements-full.txt` for local use.
 
-For a serverless deployment, configure the Python entry point as `app:app` and provide `GROQ_API_KEY` through the platform's environment settings. Chroma persistence and SQLite session storage are local runtime state; use a persistent database/object store or an external vector database when deploying beyond a single ephemeral instance.
+For a serverless deployment, configure the Python entry point as `app:app` and provide `GROQ_API_KEY` through the platform's environment settings. The SQLite retriever and session database are local runtime state; use a persistent database/object store or an external vector database when deploying beyond a single ephemeral instance.
 
 ## Evaluation
 
@@ -114,8 +120,9 @@ The current validation result is 14 backend tests passing. The React frontend al
 ## Repository layout
 
 ```text
-api.py                 FastAPI entry point and workflow response mapping
-app.py                 Streamlit entry point
+api.py                 FastAPI implementation and workflow response mapping
+app.py                 FastAPI deployment entry point
+streamlit_app.py       Optional legacy Streamlit interface
 graph/                 LangGraph state, routing, and nodes
 models/                Structured reflection schemas and Groq runner
 rag/                   Loaders, chunk IDs, vector store, and retriever
@@ -128,5 +135,6 @@ frontend/              React + TypeScript research UI
 
 - Reflection and generation require a compatible Groq model and a valid API key.
 - This is a structured orchestration implementation, not a pretrained Self-RAG checkpoint.
-- Retrieval quality depends on the selected embedding model, chunking, and source quality.
+- Retrieval uses Chroma/HuggingFace embeddings with `requirements-full.txt`, or a smaller SQLite lexical fallback with the default requirements.
+- Serverless local storage is ephemeral; production deployments need persistent storage for sessions and indexed documents.
 - Authentication is currently a lightweight local session identity, not production user authentication.

@@ -13,8 +13,6 @@ from langchain_core.documents import Document
 
 from backend_db import delete_session_group, get_session, init_db, list_sessions, upsert_session
 from graph.workflow import SelfRAGWorkflow
-from rag.loaders import DocumentLoader
-from rag.vectorstore import VectorStoreManager
 from utils.config import get_settings
 
 app = FastAPI(title="Self-RAG API", version="1.0.0")
@@ -42,6 +40,8 @@ def validate_model(model: str | None) -> str:
 
 
 def load_documents(files: list[UploadFile], urls: list[str], workdir: Path) -> tuple[list[Document], list[dict[str, str]]]:
+    from rag.loaders import DocumentLoader
+
     loader = DocumentLoader()
     documents: list[Document] = []
     sources: list[dict[str, str]] = []
@@ -71,6 +71,8 @@ def run_self_rag(question: str, model: str, documents: list[Document], history: 
     persist_directory = CHROMA_ROOT / session_id
     persist_directory.parent.mkdir(parents=True, exist_ok=True)
     if documents:
+        from rag.vectorstore import VectorStoreManager
+
         VectorStoreManager(persist_directory=str(persist_directory)).create_vectorstore(documents)
     workflow = SelfRAGWorkflow(max_retries=int(get_settings().get("MAX_RETRIES", 3)))
     return workflow.run(

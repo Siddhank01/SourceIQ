@@ -4,8 +4,6 @@ from typing import Any, Dict
 from langchain_groq import ChatGroq
 
 from models.graders import GraderRunner, ReflectionUnavailable
-from rag.retriever import Retriever
-from rag.vectorstore import VectorStoreManager
 from utils.config import get_settings
 
 INJECTION_PATTERNS = re.compile(
@@ -68,6 +66,9 @@ class SelfRAGNodes:
             return SelfRAGNodes._abstain(state, "Maximum retrieval attempts reached without validated evidence.")
         persist_directory = state.get("persist_directory") or get_settings().get("CHROMA_PERSIST_DIR", "chroma_db")
         try:
+            from rag.retriever import Retriever
+            from rag.vectorstore import VectorStoreManager
+
             retriever = Retriever(VectorStoreManager(persist_directory=str(persist_directory)).load_vectorstore())
             docs = retriever.retrieve(query, k=state.get("top_k", 4))
         except Exception as exc:
