@@ -91,6 +91,12 @@ npm run dev
 The API is served on `http://127.0.0.1:8000` and the frontend on the Vite URL shown in the terminal.
 The legacy Streamlit interface remains available with `streamlit run app.py`.
 
+## Serverless deployment
+
+The repository includes `.vercelignore` to keep local `.venv`, `node_modules`, Chroma indexes, SQLite files, caches, and Git metadata out of serverless function bundles. These local artifacts are not application dependencies and can make a deployment exceed provider size limits.
+
+For a serverless deployment, configure the Python entry point as `app:app` and provide `GROQ_API_KEY` through the platform's environment settings. Chroma persistence and SQLite session storage are local runtime state; use a persistent database/object store or an external vector database when deploying beyond a single ephemeral instance.
+
 ## Evaluation
 
 `evaluation/evaluate.py` evaluates labeled examples rather than returning fixed demonstration scores. Each example can provide expected source IDs, expected answer terms, expected rewrite behavior, expected abstention behavior, retrieved IDs, citations, and unsupported claims. Use `EvaluationMetrics.evaluate_dataset()` with a labeled dataset to obtain aggregate retrieval precision/recall, citation precision/recall, answer-term recall, correction success, abstention correctness, and end-to-end metrics.

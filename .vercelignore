@@ -1,0 +1,33 @@
+# Local Python environments and caches
+.venv/
+venv/
+env/
+ENV/
+__pycache__/
+**/__pycache__/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Local runtime data
+chroma_sessions/
+chroma_db/
+self_rag.sqlite3
+*.sqlite3
+*.sqlite
+*.db
+logs/
+*.log
+
+# Frontend dependencies/build output are deployed separately
+frontend/node_modules/
+frontend/dist/
+frontend/.vite/
+
+# Repository and local tooling
+.git/
+.vscode/
+.idea/
+.env
+.env.*
+!.env.example
